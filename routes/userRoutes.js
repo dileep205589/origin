@@ -9,7 +9,6 @@ import {
   udpatePasswordController,
   updateProfileController,
   updateProfilePicController,
-
 } from "../controllers/userController.js";
 import { isAuth } from "../middlewares/authMiddleware.js";
 import { singleUpload } from "../middlewares/multer.js";
