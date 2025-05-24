@@ -24,11 +24,13 @@ const userSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      required: [true, "city name is required"],
+        require: false
+      // required: [true, "city name is required"],
     },
     country: {
       type: String,
-      required: [true, "country name is required"],
+      require: false
+      // required: [true, "country name is required"],
     },
     phone: {
       type: String,
@@ -59,28 +61,16 @@ const userSchema = new mongoose.Schema(
 
 );
 
+
 //fuynctuions
 // hash func
 
-
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-});
-
-
-// compare function
-userSchema.methods.comparePassword = async function (plainPassword) {
-  return await bcrypt.compare(plainPassword, this.password);
-};
-
-
 //JWT TOKEN
-userSchema.methods.generateToken = function () {
-  return JWT.sign({ _id: this._id }, process.env.JWT_SECRET_KEY, {
-    expiresIn: "7d",
-  });
-};
+// userSchema.methods.generateToken = function () {
+//   return JWT.sign({ _id: this._id }, process.env.JWT_SECRET_KEY, {
+//     expiresIn: "7d",
+//   });
+// };
 
 
 export const userModel = mongoose.model("Users", userSchema);

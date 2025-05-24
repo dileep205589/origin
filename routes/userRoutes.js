@@ -1,14 +1,16 @@
 
 import express from "express";
 import {
+  forgotPasswordController,
   getUserProfileController,
   loginController,
   logoutController,
   passwordResetController,
   registerController,
-  udpatePasswordController,
+  sendOtpEmailController,
   updateProfileController,
   updateProfilePicController,
+  verifyOtpController,
 } from "../controllers/userController.js";
 import { isAuth } from "../middlewares/authMiddleware.js";
 import { singleUpload } from "../middlewares/multer.js";
@@ -29,10 +31,10 @@ const router = express.Router();
 
 //routes
 // register
-router.post("/register", limiter, registerController);
+router.post("/register" , registerController);
 
 //login
-router.post("/login",limiter, loginController);
+router.post("/login",  loginController);
 
 //profile
 router.get("/profile", isAuth, getUserProfileController);
@@ -43,8 +45,15 @@ router.get("/logout", isAuth, logoutController);
 // uopdate profile
 router.put("/profile-update", isAuth, updateProfileController);
 
+
 // updte password
-router.put("/update-password", isAuth, udpatePasswordController);
+
+router.post("/forgot-password", forgotPasswordController);
+
+router.post("/sendOtp",  sendOtpEmailController);
+
+router.post("/verifyOtp",  verifyOtpController);
+
 
 // update profile pic
 router.put("/update-picture", isAuth, singleUpload, updateProfilePicController);

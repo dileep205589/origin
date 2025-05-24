@@ -1,148 +1,170 @@
-// import userModel, { userMdoel } from "../models/userModel.js";
+
 import cloudinary from "cloudinary";
 import { getDataUri } from "../utils/features.js";
 import userModel from "../models/userModel.js";
+import JWT from 'jsonwebtoken';
+import bcrypt from "bcrypt";
+import crypto from 'crypto'
+import nodemailer from 'nodemailer'
+import { comparePassword } from "../middlewares/Authhelper.js";
+import otpModel from "../models/otpModel.js";
+
+
+
+const JWT_SECRET_KEY = "ecom"
+
+const EMAIL_USER = process.env.EMAIL_USER; 
+const EMAIL_PASS = process.env.EMAIL_PASS;
+
+
+
 export const registerController = async (req, res) => {
   try {
-    const { name, email, password, address, city, country, phone  } =
-      req.body;
-    // validation
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !city ||
-      !address ||
-      !country ||
-      !phone 
-    
+    const { name, email, password, address, city, country, phone } = req.body;
 
-    ) {
-      return res.status(500).send({
+    // Validation
+    if (!name || !email || !password || !city || !address || !country || !phone  ) {
+      return res.status(400).send({
         success: false,
-        message: "Please Provide All Fields",
+        message: "Please provide all fields",
       });
     }
 
-    // // check exisiting user
-    // const exisitingUSer = await userModel({ email });
-    // // validation
+    // Check existing user
+    const existingUser = await userModel.findOne({ email });
+    if (existingUser) {
+      return res.status(409).send({
+        success: false,
+        message: "Email already taken",
+      });
+    }
 
-    // if (exisitingUSer) {
-    //   return res.status(500).send({
-    //     success: false,
-    //     message: "email already taken",
-    //   });
-    // }
+    // Hash password before creating user
+    const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Create user
     const user = await userModel.create({
       name,
       email,
-      password,
+      password: hashedPassword,
       address,
       city,
       country,
       phone,
-    
     });
+
     res.status(201).send({
       success: true,
-      message: "Registeration Success, please login",
+      message: "Registration successful, please login",
       user,
     });
-
-
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).send({
       success: false,
-      message: "Error In Register API",
-      error,
+      message: "Error in Register API",
+      error: error.message,
     });
   }
 };
 
-
 //LOGIN
-export const loginController = async (req , res) => {
+export const loginController = async (req, res) => {
   try {
     const { email, password } = req.body;
-    //validation
+
+    // Validation
     if (!email || !password) {
-      return res.status(500).send({
+      return res.status(400).send({
         success: false,
-        message: "Please Add Email OR Password",
+        message: "Email and password are required.",
       });
     }
-    // check user
+
+    // Check user
     const user = await userModel.findOne({ email });
-    //user valdiation
     if (!user) {
       return res.status(404).send({
         success: false,
-        message: "USer Not Found",
+        message: "Email is not registered",
       });
     }
 
-    //check pass
-    const isMatch = await user.comparePassword(password);
-    //valdiation pass
+    // Compare password using bcrypt
+
+    const isMatch = await comparePassword(password, user.password);
     if (!isMatch) {
-      return res.status(500).send({
+      return res.status(401).send({
         success: false,
-        message: "invalid credentials",
+        message: "Invalid password.",
       });
     }
 
-    //teken
-    const token = user.generateToken();
-    res
-      .status(200)
-      .cookie("token", token, {
-        expires: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
-        secure: process.env.NODE_ENV === "development" ? true : false,
-        httpOnly: process.env.NODE_ENV === "development" ? true : false,
-        sameSite: process.env.NODE_ENV === "development" ? true : false,
-      })
-      .send({
-        success: true,
-        message: "Login Successfully",
-        token,
-        user,
-      });
+
+    // Generate token
+    const token = JWT.sign({ _id: user._id }, process.env.JWT_SECRET_KEY, {
+      expiresIn: "7d",
+    });
+
+    // Success response
+    res.status(200).send({
+      success: true,
+      message: "Login successful.",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        city: user.city,
+        country: user.country,
+      },
+      token,
+    });
   } catch (error) {
-    console.log(error);
+    console.error("Login error:", error.message || error);
     res.status(500).send({
-      success: "false",
-      message: "Error In Login Api",
-      error,
+      success: false,
+      message: "Error in login",
+      error: error.message,
     });
   }
 };
+
+
 
 // GET USER PROFILE
 export const getUserProfileController = async (req, res) => {
   try {
     const user = await userModel.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User not found",
+      });
+    }
+
     user.password = undefined;
+
     res.status(200).send({
       success: true,
-      message: "USer Prfolie Fetched Successfully",
+      message: "User Profile Fetched Successfully",
       user,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).send({
       success: false,
-      message: "Error In PRofile API",
-      error,
+      message: "Error in Profile API",
+      error: error.message, // send just the message
     });
   }
 };
 
 ////  LOGOUT
 
-export const logoutController = async (req ,res) => {
+export const logoutController = async (req, res) => {
   try {
     res
       .status(200)
@@ -171,13 +193,13 @@ export const logoutController = async (req ,res) => {
 export const updateProfileController = async (req, res) => {
   try {
     const user = await userModel.findById(req.user._id);
-// validation
-if(!user){
-   res.status(404).send({
-      success: false,
-      message: "User Not Found",
-    });
-}
+    // validation
+    if (!user) {
+      res.status(404).send({
+        success: false,
+        message: "User Not Found",
+      });
+    }
 
     const { name, email, address, city, country, phone } = req.body;
     // validation + Update
@@ -205,43 +227,74 @@ if(!user){
 
 //update user passsword
 
-export const udpatePasswordController = async (req, res) => {
-  try {
-    const user = await userModel.findById(req.user._id);
-    const { oldPassword, newPassword } = req.body;
-    //valdiation
-    if (!oldPassword || !newPassword) {
-      return res.status(500).send({
-        success: false,
-        message: "Please provide old or new password",
-      });
-    }
+export const forgotPasswordController  = async (req, res) => {
+  const { email } = req.body;
 
-    // old pass check
-    const isMatch = await user.comparePassword(oldPassword);
-    //validaytion
-
-    if (!isMatch) {
-      return res.status(500).send({
-        success: false,
-        message: "Invalid Old Password",
-      });
-    }
-    user.password = newPassword;
-    await user.save();
-    res.status(200).send({
-      success: true,
-      message: "Password Updated Successfully",
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      success: false,
-      message: "Error In update password API",
-      error,
-    });
+  const user = await userModel.findOne({ email });
+  if (!user) {
+    return res.status(400).json({ message: "User not found" });
   }
+
+  const otp = crypto.randomBytes(3).toString("hex"); 
+  const expiration = new Date(Date.now() + 5 * 60 * 1000); // OTP expires in 5 minutes
+
+  const otpEntry = new otpModel({ userId: user._id, otp, expiration });
+  await otpEntry.save();
+
+  await sendOtpEmailController(email, otp);
+
+  res.json({ message: "OTP sent to your email" });
 };
+
+
+//////////////  send otp Email //////////////////////
+
+
+ export const sendOtpEmailController = async (email, otp) => {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user:  "dileep@singhsoft.com",
+      pass:  "tayqbdxvlatmtrpf",
+   
+    }
+  });
+
+  const mailOptions = {
+    from: EMAIL_USER,
+    to: "dileepmeena975@gmail.com",
+    subject: "OTP for Password Reset",
+    text: `Your OTP for password reset is ${otp}. It is valid for 5 minutes.`
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+
+/////////////////////// verify otp //////////////////////////////
+
+export const verifyOtpController = async (req, res) => {
+  const { email, otp } = req.body;
+
+  const user = await userModel.findOne({ email });
+  if (!user) {
+    return res.status(400).json({ message: "User not found" });
+  }
+
+  const otpEntry = await otpModel.findOne({ userId: user._id, otp });
+
+  // const otpEntry = "746ac0"
+
+  if (!otpEntry || otpEntry.expiration < new Date()) {
+    return res.status(400).json({ message: "OTP is invalid or expired" });
+  }
+
+  user.isPasswordResetInProgress = true;
+  await user.save();
+
+  res.json({ message: "OTP verified. You can now reset your password" });
+};
+
 
 /// Update user profile photo
 
@@ -281,16 +334,16 @@ export const updateProfilePicController = async (req, res) => {
 export const passwordResetController = async (req, res) => {
   try {
     // user get email || newPassword || answer
-    const { email, newPassword, answer } = req.body;
+    const { email, newPassword } = req.body;
     // valdiation
-    if (!email || !newPassword || !answer) {
+    if (!email || !newPassword ) {
       return res.status(500).send({
         success: false,
         message: "Please Provide All Fields",
       });
     }
     // find user
-    const user = await userModel.findOne({ email, answer });
+    const user = await userModel.findOne({ email  });
     //valdiation
     if (!user) {
       return res.status(404).send({
@@ -314,6 +367,10 @@ export const passwordResetController = async (req, res) => {
     });
   }
 };
+
+
+
+
 
 
 

@@ -27,12 +27,19 @@ cloudinary.v2.config({
 });
 
 const app = express();
+
+app.use(cors({
+  origin: "http://localhost:3000", // frontend origin
+  credentials: true               // allow sending cookies
+}));
+
+
 //middlewares
 app.use(MongoSanitize())
 app.use(helmet());
 app.use(morgan("dev"));
 app.use(express.json());
-app.use(cors());
+
 app.use(cookieParser());
 
 //route
